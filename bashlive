@@ -1,0 +1,184 @@
+#!/bin/bash -x
+#
+# Copyright (C) 2014, Leon van Kammen (Coder of Salvation)
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+# 
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# 
+TMPFILE="/tmp/.bashlive.$(whoami)"
+C_NORMAL="\\033[0;0m"
+C_RED="\\033[0;31m"
+C_GREEN="\\033[0;32m"
+TOKEN="|||"
+REPOS=("https://raw.github.com/coderofsalvation/bashlive.bash/master/index.txt")
+[[ "$(basename "$0" )" != "bashlive" ]] && INCLUDED=1
+
+update(){
+  rm $TMPFILE* &>/dev/null; init 
+}
+  
+init(){  
+  [[ ! -f $TMPFILE.index.readable ]] && gencache 
+}
+
+gencache(){
+  :>$TMPFILE.index
+  printf "$C_GREEN""indexing repositories and generating cache $C_NORMAL\n"
+  for repo in "${REPOS[@]}"; do 
+    echo "indexing '$repo'"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    echo "$index" | tail -n+3 >> $TMPFILE.index; 
+  done
+  cat $TMPFILE.index | sed 's/'"$TOKEN"'.*//g' > $TMPFILE.index.readable
+  echo "done ($(cat $TMPFILE.index | wc -l) bashlives collected)"; return 0
+}
+
+bashlives(){
+  printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
+  cat $TMPFILE.index.readable | cut -c 1-$(tput cols) | more 
+  echo ""; 
+  console;
+}
+
+tryget(){
+  integer=$(echo "$1" | grep "^-\?[0-9]*$")
+  (( "${#integer}" > 0 )) || get "$1"
+  bashlivepath="$( grep "^$integer .*" $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' )"
+  get "$bashlivepath"
+  includedbybash || console # dont do console when sourced by bash
+}
+
+# remove leading and trailing whitespaces
+# usage: echo " foo bar " | trim 
+ 
+trim(){
+   cat - | sed -e 's/^ *//g' -e 's/ *$//g'
+}
+
+get(){
+  data="$(grep "$1" $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$1' not found $C_NORMAL\n"; return 1; }
+  [[ "$data" != "script" ]] && content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  { printf "\n# author: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
+  tryinsert "$content" "$data" "$1"
+}
+/(){ get "$@"; } # alias
+
+# highlights keywords in bashcode script
+# @param backgroundcolorcode
+# @param foregroundcolorcode
+highlightcode(){
+  GREP_COLOR='$1;$2' 
+  cat - | grep -E --color 'usage|@param |@|$|http.*|sudo |su |curl |wget |bash |sh |if |then |while |for |do |\{|}|\|\||&&|$'
+}
+  
+trysource(){  
+  printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"
+  includedbybash && eval "${content/exit/return}"; return 0 # replace 'exit'-calls with returns, and continue, even if errored
+}
+
+tryinsert(){
+  content="$1"; url="$2"; path="$3"; app="$(basename "$0" )";
+  trysource "$content" && return 0; # dont ask  when sourced by /bin/bash
+  if [[ -n $INCLUDED ]]; then
+    printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "insert? (y/n) " write
+    if [[ "$write" == "y" ]]; then insert "$content" "$url" "$path"; fi
+  fi
+}
+
+checkduplicatefunctions(){
+  echo "$1" | grep -E "(\(\){|\(\)\n{)" | head -n1 | while read function; do 
+    grep "$function" "$0" &>/dev/null && return 1
+  done
+  return 0
+}
+
+scripthasbashlive(){
+  grep -E '.*(source|\.) .*bashlive.*' "$1" &>/dev/null; return $?
+}
+
+insert(){
+  content="$1"; url="$2"; path="$3"; file="$(readlink -f "$0")"
+  scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
+  checkduplicatefunctions "$content"     || { printf "$C_RED""duplicate function detected in your script..bashlive was already included?$C_NORMA:L\n"; return 1; }
+  code="$( echo "$content" | grep "^#"; printf "# inserted by bashlive (bashlive path: $path)\n# author: $url\n\n"; echo "$content" | grep -v "^#" )"
+  { IFS=''; cat "$file" | while read line; do :
+      echo "$line"; if scripthasbashlive "$file"; then printf "\n%s\n" "$code"; fi
+    done
+  } > $TMPFILE.insert;
+  echo "bashlive> writing backup to $TMPFILE.backup"; cp "$file" "$TMPFILE.backup";
+  cp "$TMPFILE.insert" "$file" || { printf "$C_RED""could not copy '$TMPFILE.insert' to '$file' :($C_NORMAL\n"; return 1; }
+}
+
+includedbybash(){
+  appname="$(basename "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
+}
+
+usage(){
+  TEXT='
+  subcommands:
+    
+    bashlives                   list all bashlives
+    search <keyword>          search for bashlives which match keyword
+    update                    refresh the (repo)list of bashlives 
+    get <path>                print a bashlive (and optionally include it in your script)
+    <number>                  print bashlive with given index (printed by "ls" or "search")
+'
+  echo "$TEXT"
+}
+help(){ usage; } # alias
+
+console(){
+  printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "" cmd;
+  [[ "${#cmd}" == 0 ]] && return 0 # exit on enter 
+  # check if command is entered, or in case of an integer call get
+  iscommand "${cmd/ */}" && ${cmd} || tryget "$cmd"
+}
+
+search(){
+  # filters
+  # --framework 
+  # --function
+  # --bashfu
+  init; grepstr=""
+  grep -E "$1" $TMPFILE.index.readable | more
+  console
+}
+
+_bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
+  init; local cur
+  # Pointer to current completion word.
+  # By convention, it's named "cur" but this isn't strictly necessary.
+
+  COMPREPLY=()   # Array variable storing the possible completions.
+  cur=${COMP_WORDS[COMP_CWORD]}
+  case "$cur" in
+    *) 
+       COMPREPLY=( $( compgen -W "$( cat $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' ) /" -- $cur ) )
+       ;;
+  esac
+
+  return 0
+}
+
+iscommand(){
+  [[ "$1" == "help" ]] || [[ "$1" == "get" ]] || [[ "$1" == "search" ]] || [[ "$1" == "list" ]] || [[ "$1" == "update" ]] && return 0
+  return 1
+}
+
+cleanup(){
+  printf "$C_NORMAL"
+}
+
+if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
+complete -F _bashlive_autocomplete /
+trap cleanup SIGTERM 2 3 15
