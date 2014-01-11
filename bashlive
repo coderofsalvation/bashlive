@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 # Copyright (C) 2014, Leon van Kammen (Coder of Salvation)
 # 
@@ -20,7 +20,7 @@ C_NORMAL="\\033[0;0m"
 C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
 TOKEN="|||"
-REPOS=("https://raw.github.com/coderofsalvation/bashlive.bash/master/index.txt")
+REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 [[ "$(basename "$0" )" != "bashlive" ]] && INCLUDED=1
 
 update(){
@@ -65,10 +65,11 @@ trim(){
 }
 
 get(){
-  data="$(grep "$1" $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  ! is_integer "$1" && [[ ! "$1" =~ "/" ]] && { search "$@"; return 0; } # search if no path given
+  data="$(grep "$1 " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
   [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$1' not found $C_NORMAL\n"; return 1; }
   [[ "$data" != "script" ]] && content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  { printf "\n# author: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
+  { printf "\n# source: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
   tryinsert "$content" "$data" "$1"
 }
 /(){ get "$@"; } # alias
@@ -84,6 +85,10 @@ highlightcode(){
 trysource(){  
   printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"
   includedbybash && eval "${content/exit/return}"; return 0 # replace 'exit'-calls with returns, and continue, even if errored
+}
+
+is_integer(){
+  number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
 }
 
 tryinsert(){
@@ -144,14 +149,12 @@ console(){
   iscommand "${cmd/ */}" && ${cmd} || tryget "$cmd"
 }
 
+multimatch() { 
+  awk 'BEGIN{for(i=1;i<ARGC;i++) a[i]=ARGV[i]; ARGC=1} {for (i in a) if ($0 !~ a[i]) next; print}' "$@"
+}
+
 search(){
-  # filters
-  # --framework 
-  # --function
-  # --bashfu
-  init; grepstr=""
-  grep -E "$1" $TMPFILE.index.readable | more
-  console
+  args="$*"; init; cat $TMPFILE.index.readable | multimatch "$@" | more | grep -E "${args// /|}"
 }
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
