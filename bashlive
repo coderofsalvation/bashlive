@@ -21,7 +21,8 @@ C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
 TOKEN="|||"
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
-[[ "$(basename "$0" )" != "bashlive" ]] && INCLUDED=1
+SELF="${0//-/}"
+[[ "$(basename "$SELF" )" != "bashlive" ]] && INCLUDED=1
 
 bashlive::update(){
   rm $TMPFILE* &>/dev/null; init 
@@ -166,11 +167,17 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
   cur=${COMP_WORDS[COMP_CWORD]}
   case "$cur" in
     *) 
-       COMPREPLY=( $( compgen -W "$( cat $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' ) /" -- $cur ) )
+       items="$( cat $TMPFILE.index.readable | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' )"
+       #explode $'\n' "COMPREPLY" "$(cat $TMPFILE.index.readable | sed 's/^[0-9]\+ //g' )"
+       COMPREPLY=( $( compgen -W "$items" -- $cur ) )
        ;;
   esac
 
   return 0
+}
+
+explode(){
+  IFS="$1" read -a $2 <<< "$3"
 }
 
 iscommand(){
