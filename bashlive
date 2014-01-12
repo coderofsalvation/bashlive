@@ -21,8 +21,10 @@ C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
 TOKEN="|||"
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
-SELF="${0//-/}"
-[[ "$(basename "$SELF" )" != "bashlive" ]] && INCLUDED=1
+
+mybasename(){
+  basename "${0//-/}" # mybasename does not like strings with '-' (which is the case with '-bash')
+}
 
 bashlive::update(){
   rm $TMPFILE* &>/dev/null; init 
@@ -93,7 +95,7 @@ is_integer(){
 }
 
 tryinsert(){
-  content="$1"; url="$2"; path="$3"; app="$(basename "$0" )";
+  content="$1"; url="$2"; path="$3"; app="$(mybasename "$0" )";
   trysource "$content" && return 0; # dont ask  when sourced by /bin/bash
   if [[ -n $INCLUDED ]]; then
     printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "insert? (y/n) " write
@@ -126,7 +128,7 @@ insert(){
 }
 
 includedbybash(){
-  appname="$(basename "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
+  appname="$(mybasename "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
 }
 
 usage(){
@@ -189,11 +191,11 @@ cleanup(){
   printf "$C_NORMAL"
 }
 
+[[ "$(mybasename "$0" )" != "bashlive" ]] && INCLUDED=1
 if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
 includedbybash && {
-  bashlive::update
-  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "shell upgraded, welcome Chuck Norris"
+  init; 
   printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion.";
-}
+} 
