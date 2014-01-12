@@ -185,3 +185,8 @@ cleanup(){
 if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
+includedbybash && {
+  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "welcome chuck norris"
+  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "your shell has been upgraded with web knowledge"
+  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion.";
+}
