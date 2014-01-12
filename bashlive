@@ -23,7 +23,7 @@ TOKEN="|||"
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 [[ "$(basename "$0" )" != "bashlive" ]] && INCLUDED=1
 
-update(){
+bashlive::update(){
   rm $TMPFILE* &>/dev/null; init 
 }
   
@@ -33,13 +33,13 @@ init(){
 
 gencache(){
   :>$TMPFILE.index
-  printf "$C_GREEN""indexing repositories and generating cache $C_NORMAL\n"
+#  printf "$C_GREEN""indexing repositories and generating cache $C_NORMAL into /tmp\n"
   for repo in "${REPOS[@]}"; do 
-    echo "indexing '$repo'"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    printf "$C_GREEN""bashdown>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | tail -n+3 >> $TMPFILE.index; 
   done
   cat $TMPFILE.index | sed 's/'"$TOKEN"'.*//g' > $TMPFILE.index.readable
-  echo "done ($(cat $TMPFILE.index | wc -l) bashlives collected)"; return 0
+  printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $TMPFILE.index | wc -l) items were indexed)\n"; return 0
 }
 
 bashlives(){
@@ -134,7 +134,7 @@ usage(){
     
     bashlives                   list all bashlives
     search <keyword>          search for bashlives which match keyword
-    update                    refresh the (repo)list of bashlives 
+    bashlive::update                    refresh the (repo)list of bashlives 
     get <path>                print a bashlive (and optionally include it in your script)
     <number>                  print bashlive with given index (printed by "ls" or "search")
 '
@@ -174,7 +174,7 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
 }
 
 iscommand(){
-  [[ "$1" == "help" ]] || [[ "$1" == "get" ]] || [[ "$1" == "search" ]] || [[ "$1" == "list" ]] || [[ "$1" == "update" ]] && return 0
+  [[ "$1" == "help" ]] || [[ "$1" == "get" ]] || [[ "$1" == "search" ]] || [[ "$1" == "list" ]] || [[ "$1" == "bashlive::update" ]] && return 0
   return 1
 }
 
@@ -186,7 +186,7 @@ if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
 includedbybash && {
-  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "welcome chuck norris"
-  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "your shell has been upgraded with web knowledge"
+  bashlive::update
+  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "shell upgraded, welcome Chuck Norris"
   printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion.";
 }
