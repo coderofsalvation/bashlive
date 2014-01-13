@@ -83,7 +83,7 @@ get(){
   data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
   [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  [[ "$INTERACTIVE" == "1" ]] && { printf "\n# source: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
+  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
   trysource "$content" "$data" "$arg"
 }
 /(){ get "$@"; } # alias
