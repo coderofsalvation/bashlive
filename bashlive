@@ -69,7 +69,7 @@ trim(){
 
 # checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
 checkinteractive(){
-  arg="$1"; [[ "$arg" =~ ":/" ]] && INTERACTIVE=0 || INTERACTIVE=1
+  arg="$1"; [[ "$arg" =~ \!$ ]] && INTERACTIVE=0 || INTERACTIVE=1
 }
 
 is_file(){
@@ -79,7 +79,7 @@ is_file(){
 get(){
   is_file "$1" && scripthasbashlive && insert
   ! is_integer "$1" && [[ ! "$1" =~ "/" ]] && { search "$@"; return 0; } # search if no path given
-  checkinteractive "$1"; arg="${1/:/}"
+  checkinteractive "$1"; arg="${1/\!/}"
   data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
   [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
