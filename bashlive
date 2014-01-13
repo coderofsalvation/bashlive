@@ -216,6 +216,7 @@ cleanup(){
   printf "$C_NORMAL"
 }
 
+which sed grep awk which &>/dev/null || { echo "bashlive needs at least the following utilities: sed grep awk which"; }
 [[ "$(mybasename "$0" )" != "bashlive" ]] && INCLUDED=1
 if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
 complete -F _bashlive_autocomplete /
