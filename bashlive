@@ -111,7 +111,17 @@ is_integer(){
 
 trysource(){
   content="$1"; url="$2"; path="$3"; app="$(mybasename "$0" )";
+  checkdependencies "$content" || return 0
   includedbybash && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
+}
+
+checkdependencies(){
+  depends="$(echo "$1" | grep -E "@dependencies " | sed 's/.*dependencies //g' )"
+  (( ${#depends} == 0 )) && return 0
+  for depend in $depends; do 
+    which $depend &>/dev/null || { printf "$C_RED[!] please install '$depend' first $C_NORMAL\n"; return 1; }
+  done
+  return 0
 }
 
 checkduplicatefunctions(){
