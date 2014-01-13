@@ -20,6 +20,7 @@ C_NORMAL="\\033[0;0m"
 C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
 TOKEN="|||"
+INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 
 mybasename(){
@@ -36,7 +37,6 @@ init(){
 
 gencache(){
   :>$TMPFILE.index
-#  printf "$C_GREEN""indexing repositories and generating cache $C_NORMAL into /tmp\n"
   for repo in "${REPOS[@]}"; do 
     printf "$C_GREEN""bashdown>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | tail -n+3 >> $TMPFILE.index; 
@@ -67,13 +67,24 @@ trim(){
    cat - | sed -e 's/^ *//g' -e 's/ *$//g'
 }
 
+# checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
+checkinteractive(){
+  arg="$1"; [[ "$arg" =~ ":/" ]] && INTERACTIVE=0 || INTERACTIVE=1
+}
+
+is_file(){
+  [[ -f "$1" ]] && return 0 || return 1
+}
+
 get(){
+  is_file "$1" && scripthasbashlive && insert
   ! is_integer "$1" && [[ ! "$1" =~ "/" ]] && { search "$@"; return 0; } # search if no path given
-  data="$(grep "$1 " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
-  [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$1' not found $C_NORMAL\n"; return 1; }
-  [[ "$data" != "script" ]] && content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  { printf "\n# source: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
-  tryinsert "$content" "$data" "$1"
+  checkinteractive "$1"; arg="${1/:/}"
+  data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
+  content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  [[ "$INTERACTIVE" == "1" ]] && { printf "\n# source: ${data/\/raw*/}\n\n"; printf "$content\n\n"; } | more | highlightcode
+  trysource "$content" "$data" "$arg"
 }
 /(){ get "$@"; } # alias
 
@@ -85,27 +96,27 @@ highlightcode(){
   cat - | grep -E --color 'usage|@param |@|$|http.*|sudo |su |curl |wget |bash |sh |if |then |while |for |do |\{|}|\|\||&&|$'
 }
   
-trysource(){  
-  printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"
-  includedbybash && eval "${content/exit/return}"; return 0 # replace 'exit'-calls with returns, and continue, even if errored
+dosource(){  
+  [[ "$INTERACTIVE" == "1" ]] && { 
+    printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"; 
+    [[ ! "$write" == "y" ]] && return 0;
+  } || printf "$C_GREEN""sourcing livebash $C_NORMAL'$3'\n" 1>&2;
+  eval "${content/exit/return}"; 
+  return 0 # replace 'exit'-calls with returns, and continue, even if errored
 }
 
 is_integer(){
   number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
 }
 
-tryinsert(){
+trysource(){
   content="$1"; url="$2"; path="$3"; app="$(mybasename "$0" )";
-  trysource "$content" && return 0; # dont ask  when sourced by /bin/bash
-  if [[ -n $INCLUDED ]]; then
-    printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "insert? (y/n) " write
-    if [[ "$write" == "y" ]]; then insert "$content" "$url" "$path"; fi
-  fi
+  includedbybash && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
 }
 
 checkduplicatefunctions(){
-  echo "$1" | grep -E "(\(\){|\(\)\n{)" | head -n1 | while read function; do 
-    grep "$function" "$0" &>/dev/null && return 1
+  echo "$1" | grep -E "(\(\){|\(\)\n{)" | while read function; do 
+    grep "$function" "$1" &>/dev/null && return 1
   done
   return 0
 }
@@ -115,16 +126,19 @@ scripthasbashlive(){
 }
 
 insert(){
-  content="$1"; url="$2"; path="$3"; file="$(readlink -f "$0")"
+  file="$(readlink -f "$0")"; 
   scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
-  checkduplicatefunctions "$content"     || { printf "$C_RED""duplicate function detected in your script..bashlive was already included?$C_NORMA:L\n"; return 1; }
-  code="$( echo "$content" | grep "^#"; printf "# inserted by bashlive (bashlive path: $path)\n# author: $url\n\n"; echo "$content" | grep -v "^#" )"
-  { IFS=''; cat "$file" | while read line; do :
-      echo "$line"; if scripthasbashlive "$file"; then printf "\n%s\n" "$code"; fi
-    done
-  } > $TMPFILE.insert;
-  echo "bashlive> writing backup to $TMPFILE.backup"; cp "$file" "$TMPFILE.backup";
-  cp "$TMPFILE.insert" "$file" || { printf "$C_RED""could not copy '$TMPFILE.insert' to '$file' :($C_NORMAL\n"; return 1; }
+  read -p "bake bashlive into script? (y/n)" bake
+  echo "*TODO*"
+ # grep -E "^/ :/.*" "$file" )" > $TMPFILE.paths
+
+ # code="$( cat "$file" | grep "^#"; printf "# inserted by bashlive (bashlive path: $path)\n# author: $url\n\n"; echo "$content" | grep -v "^#" )"
+ # { IFS=''; cat "$file" | while read line; do :
+ #     echo "$line"; if [[ "$line" =~ ". " ]] && [[ "$line" =~ "bashlive" ]]; then printf "\n%s\n" "$code"; fi
+ #   done
+ # } > $TMPFILE.insert;
+ # echo "bashlive> writing backup to $TMPFILE.backup"; cp "$file" "$TMPFILE.backup";
+ # cp "$TMPFILE.insert" "$file" || { printf "$C_RED""could not copy '$TMPFILE.insert' to '$file' :($C_NORMAL\n"; return 1; }
 }
 
 includedbybash(){
@@ -158,6 +172,7 @@ multimatch() {
 
 search(){
   args="$*"; init; cat $TMPFILE.index.readable | multimatch "$@" | more | grep -E "${args// /|}"
+  [[ -n $INCLUDED ]] && console
 }
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
@@ -197,5 +212,5 @@ complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
 includedbybash && {
   init; 
-  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion.";
+  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion." 1>&2;
 } 
