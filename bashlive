@@ -76,15 +76,24 @@ is_file(){
   [[ -f "$1" ]] && return 0 || return 1
 }
 
+showfunctions(){
+  set | grep " ()" | grep -v "_"
+}
+
 get(){
   is_file "$1" && scripthasbashlive && insert
   ! is_integer "$1" && [[ ! "$1" =~ "/" ]] && { search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}"
   data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
   [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
-  content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
-  trysource "$content" "$data" "$arg"
+  if [[ ! "$data" =~ ".git" ]]; then
+    content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+    [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
+    trysource "$content" "$data" "$arg"
+  else
+    [[ "$INTERACTIVE" == "1" ]] && { printf "$C_GREEN"; read -p "clone $data into current dir? (y/n) " clone; [[ "$clone" == "y" ]] && git clone "$data"; }
+    printf "$C_NORMAL"
+  fi
 }
 /(){ get "$@"; } # alias
 
