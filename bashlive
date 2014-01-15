@@ -28,10 +28,10 @@ mybasename(){
 }
 
 bashlive::update(){
-  rm $TMPFILE* &>/dev/null; init 
+  rm $TMPFILE* &>/dev/null; bashlive::init 
 }
   
-init(){  
+bashlive::init(){  
   [[ ! -f $TMPFILE.index.readable ]] && gencache 
 }
 
@@ -57,7 +57,7 @@ tryget(){
   (( "${#integer}" > 0 )) || get "$1"
   bashlivepath="$( grep "^$integer .*" $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' )"
   get "$bashlivepath"
-  includedbybash || console # dont do console when sourced by bash
+  isincluded || console # dont do console when sourced by bash
 }
 
 # remove leading and trailing whitespaces
@@ -76,24 +76,26 @@ is_file(){
   [[ -f "$1" ]] && return 0 || return 1
 }
 
-showfunctions(){
-  set | grep " ()" | grep -v "_"
+is_url(){
+  [[ "$1" =~ ^http ]] && return 0 || return 1
+}
+
+
+is_function() {
+  type "$1" &>/dev/null && return 0 || return 1
 }
 
 get(){
-  is_file "$1" && scripthasbashlive && insert
-  ! is_integer "$1" && [[ ! "$1" =~ "/" ]] && { search "$@"; return 0; } # search if no path given
-  checkinteractive "$1"; arg="${1/\!/}"
-  data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  arg="${1/\!/}"
+  is_function "$(basename "$arg")" && return 0; # dont source twice  
+  is_file "$arg" && scripthasbashlive && insert # bake *TODO*
+  ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { search "$@"; return 0; } # search if no path given
+  checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
+  is_url "$arg" && data="$arg" || data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
   [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
-  if [[ ! "$data" =~ ".git" ]]; then
-    content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-    [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
-    trysource "$content" "$data" "$arg"
-  else
-    [[ "$INTERACTIVE" == "1" ]] && { printf "$C_GREEN"; read -p "clone $data into current dir? (y/n) " clone; [[ "$clone" == "y" ]] && git clone "$data"; }
-    printf "$C_NORMAL"
-  fi
+  content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
+  trysource "$content" "$data" "$arg"
 }
 /(){ get "$@"; } # alias
 
@@ -121,7 +123,7 @@ is_integer(){
 trysource(){
   content="$1"; url="$2"; path="$3"; app="$(mybasename "$0" )";
   checkdependencies "$content" || return 0
-  includedbybash && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
+  isincluded && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
 }
 
 checkdependencies(){
@@ -160,7 +162,11 @@ insert(){
  # cp "$TMPFILE.insert" "$file" || { printf "$C_RED""could not copy '$TMPFILE.insert' to '$file' :($C_NORMAL\n"; return 1; }
 }
 
-includedbybash(){
+isincluded(){
+  appname="$(mybasename "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
+}
+
+isincludedbybash(){
   appname="$(mybasename "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
 }
 
@@ -190,12 +196,12 @@ multimatch() {
 }
 
 search(){
-  args="$*"; init; cat $TMPFILE.index.readable | multimatch "$@" | more | grep -E "${args// /|}"
+  args="$*"; bashlive::init; cat $TMPFILE.index.readable | multimatch "$@" | more | grep -E "${args// /|}"
   [[ -n $INCLUDED ]] && console
 }
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
-  init; local cur
+  bashlive::init; local cur
   # Pointer to current completion word.
   # By convention, it's named "cur" but this isn't strictly necessary.
 
@@ -230,7 +236,7 @@ which sed grep awk which &>/dev/null || { echo "bashlive needs at least the foll
 if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
-includedbybash && {
-  init; 
+isincludedbybash && {
+  bashlive::init; 
   printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion." 1>&2;
 } 
