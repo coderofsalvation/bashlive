@@ -23,10 +23,6 @@ TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 
-mybasename(){
-  basename "${0//-/}" # mybasename does not like strings with '-' (which is the case with '-bash')
-}
-
 bashlive::update(){
   rm $TMPFILE* &>/dev/null; bashlive::init 
 }
@@ -51,12 +47,15 @@ bashlives(){
   echo ""; 
   console;
 }
+  
+integer2bashlivepath(){
+  grep "^$1 .*" $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
+}
 
 tryget(){
   integer=$(echo "$1" | grep "^-\?[0-9]*$")
   (( "${#integer}" > 0 )) || get "$1"
-  bashlivepath="$( grep "^$integer .*" $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' )"
-  get "$bashlivepath"
+  get "$( integer2bashlivepath $integer )"
   isincluded || console # dont do console when sourced by bash
 }
 
@@ -85,17 +84,22 @@ is_function() {
   type "$1" &>/dev/null && return 0 || return 1
 }
 
+has_shebang(){
+  [[ "$1" =~ ^#! ]] && return 0 || return 1
+}
+
 get(){
   arg="${1/\!/}"
-  is_function "$(basename "$arg")" && return 0; # dont source twice  
+  is_function "$(basename -- "$arg")" && return 0; # dont source twice  
   is_file "$arg" && scripthasbashlive && insert # bake *TODO*
   ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
-  is_url "$arg" && data="$arg" || data="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
-  [[ ${#data} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
-  content="$(curl -s "$data")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${data/\/raw*/}" "$content"; } | more | highlightcode
-  trysource "$content" "$data" "$arg"
+  is_url "$arg" && data="$arg" || url="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
+  is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
+  content="$(curl -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
+  trysource "$content" "$url" "$path"
 }
 /(){ get "$@"; } # alias
 
@@ -121,8 +125,13 @@ is_integer(){
 }
 
 trysource(){
-  content="$1"; url="$2"; path="$3"; app="$(mybasename "$0" )";
+  content="$1"; url="$2"; path="$3"; app="$(basename -- "$0" )";
   checkdependencies "$content" || return 0
+  has_shebang "$1" && echo "$1" > "$(basename -- "$path")" && {
+    chmod 755 "$(basename -- "$path")";
+    printf "$C_GREEN""downloading bash app $C_NORMAL'./$(basename -- "$path")'\n"
+    return 0
+  }
   isincluded && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
 }
 
@@ -163,11 +172,11 @@ insert(){
 }
 
 isincluded(){
-  appname="$(mybasename "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
+  appname="$(basename -- "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
 }
 
 isincludedbybash(){
-  appname="$(mybasename "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
+  appname="$(basename -- "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
 }
 
 usage(){
@@ -232,8 +241,7 @@ cleanup(){
 }
 
 which sed grep awk which &>/dev/null || { echo "bashlive needs at least the following utilities: sed grep awk which"; }
-[[ "$(mybasename "$0" )" != "bashlive" ]] && INCLUDED=1
-if iscommand "$1"; then "$@"; else [[ ! -n $INCLUDED ]] && echo "type 'help' for help" &&  console; fi
+[[ "$(basename -- "$0" )" != "bashlive" ]] && INCLUDED=1 || { echo "just type 'source $0' to enjoy bashlive"; exit; }
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
 isincludedbybash && {
