@@ -45,7 +45,7 @@ bashlives(){
   printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
   cat $TMPFILE.index.readable | cut -c 1-$(tput cols) | more 
   echo ""; 
-  console;
+  #console;
 }
   
 integer2bashlivepath(){
@@ -56,7 +56,7 @@ tryget(){
   integer=$(echo "$1" | grep "^-\?[0-9]*$")
   (( "${#integer}" > 0 )) || get "$1"
   get "$( integer2bashlivepath $integer )"
-  isincluded || console # dont do console when sourced by bash
+  # isincluded || console # dont do console when sourced by bash
 }
 
 # remove leading and trailing whitespaces
@@ -204,9 +204,13 @@ multimatch() {
   awk 'BEGIN{for(i=1;i<ARGC;i++) a[i]=ARGV[i]; ARGC=1} {for (i in a) if ($0 !~ a[i]) next; print}' "$@"
 }
 
+function wraplines(){
+    cat - | cut -c 1-$(tput cols)
+}
+
 search(){
-  args="$*"; bashlive::init; cat $TMPFILE.index.readable | multimatch "$@" | more | grep -E "${args// /|}"
-  [[ -n $INCLUDED ]] && console
+  args="$*"; bashlive::init; cat $TMPFILE.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
+  # [[ -n $INCLUDED ]] && console
 }
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
