@@ -25,6 +25,7 @@ REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt"
 
 bashlive::update(){
   rm $TMPFILE* &>/dev/null; bashlive::init 
+  printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget https://raw2.github.com/coderofsalvation/bashlive/master/bashlive'$C_NORMAL\n"
 }
   
 bashlive::init(){  
@@ -34,7 +35,7 @@ bashlive::init(){
 gencache(){
   :>$TMPFILE.index
   for repo in "${REPOS[@]}"; do 
-    printf "$C_GREEN""bashdown>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | tail -n+3 >> $TMPFILE.index; 
   done
   cat $TMPFILE.index | sed 's/'"$TOKEN"'.*//g' > $TMPFILE.index.readable
@@ -45,7 +46,7 @@ bashlives(){
   printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
   cat $TMPFILE.index.readable | cut -c 1-$(tput cols) | more 
   echo ""; 
-  #console;
+  #bashlive::console;
 }
   
 integer2bashlivepath(){
@@ -56,7 +57,7 @@ tryget(){
   integer=$(echo "$1" | grep "^-\?[0-9]*$")
   (( "${#integer}" > 0 )) || get "$1"
   get "$( integer2bashlivepath $integer )"
-  # isincluded || console # dont do console when sourced by bash
+  # isincluded || bashlive::console # dont do bashlive::console when sourced by bash
 }
 
 # remove leading and trailing whitespaces
@@ -193,7 +194,7 @@ usage(){
 }
 help(){ usage; } # alias
 
-console(){
+bashlive::console(){
   printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "" cmd;
   [[ "${#cmd}" == 0 ]] && return 0 # exit on enter 
   # check if command is entered, or in case of an integer call get
@@ -210,7 +211,7 @@ function wraplines(){
 
 search(){
   args="$*"; bashlive::init; cat $TMPFILE.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
-  # [[ -n $INCLUDED ]] && console
+  # [[ -n $INCLUDED ]] && bashlive::console
 }
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
