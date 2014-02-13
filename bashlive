@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # 
-TMPFILE="/tmp/.bashlive.$(whoami)"
+BASHLIVETMP="/tmp/.bashlive.$(whoami)"
 C_NORMAL="\\033[0;0m"
 C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
@@ -24,33 +24,33 @@ INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 
 bashlive::update(){
-  rm $TMPFILE* &>/dev/null; bashlive::init 
+  rm $BASHLIVETMP* &>/dev/null; bashlive::init 
   printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget https://raw2.github.com/coderofsalvation/bashlive/master/bashlive'$C_NORMAL\n"
 }
   
 bashlive::init(){  
-  [[ ! -f $TMPFILE.index.readable ]] && gencache 
+  [[ ! -f $BASHLIVETMP.index.readable ]] && gencache 
 }
 
 gencache(){
-  :>$TMPFILE.index
+  :>$BASHLIVETMP.index
   for repo in "${REPOS[@]}"; do 
     printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
-    echo "$index" | tail -n+3 >> $TMPFILE.index; 
+    echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
   done
-  cat $TMPFILE.index | sed 's/'"$TOKEN"'.*//g' > $TMPFILE.index.readable
-  printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $TMPFILE.index | wc -l) items were indexed)\n"; return 0
+  cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
+  printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $BASHLIVETMP.index | wc -l) items were indexed)\n"; return 0
 }
 
 bashlives(){
   printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
-  cat $TMPFILE.index.readable | cut -c 1-$(tput cols) | more 
+  cat $BASHLIVETMP.index.readable | cut -c 1-$(tput cols) | more 
   echo ""; 
   #bashlive::console;
 }
   
 integer2bashlivepath(){
-  grep "^$1 .*" $TMPFILE.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
+  grep "^$1 .*" $BASHLIVETMP.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
 }
 
 tryget(){
@@ -85,8 +85,26 @@ is_function() {
   type "$1" &>/dev/null && return 0 || return 1
 }
 
+is_webpipe(){
+  [[ "$1" =~ "/webpipe/" ]] && return 0 || return 1
+}
+
 has_shebang(){
   [[ "$1" =~ ^#! ]] && return 0 || return 1
+}
+
+trysourcewebpipe(){
+  # first make sure webpipe is sourced 
+  if ! is_function "webpipe::set"; then 
+    url="$(get_url /bash/app/network/webpipe)"; 
+    data="$(curl -s "$url")";
+    [[ $? == 0 ]] && INTERACTIVE=0 dosource "$data" "" "/bash/app/network/webpipe";
+  fi
+  webpipe::set webpipe "$(get_url "$1")" && printf "$C_GREEN""bashlive>""$C_NORMAL connected webpipe, you can now run '$(basename "$1") --help'\n" 
+}
+  
+get_url(){
+  grep "$1 " $BASHLIVETMP.index | head -n1 | sed "s/.*$TOKEN//g"
 }
 
 get(){
@@ -95,9 +113,10 @@ get(){
   is_file "$arg" && scripthasbashlive && insert # bake *TODO*
   ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
-  is_url "$arg" && data="$arg" || url="$(grep "$arg " $TMPFILE.index | head -n1 | sed "s/.*$TOKEN//g")"
+  is_url "$arg" && data="$arg" || url="$(get_url "$arg")"
   [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
+  is_webpipe "$arg" && { trysourcewebpipe "$arg"; return 0; }
   content="$(curl -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
   [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
   trysource "$content" "$url" "$path"
@@ -116,8 +135,8 @@ dosource(){
   [[ "$INTERACTIVE" == "1" ]] && { 
     printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"; 
     [[ ! "$write" == "y" ]] && return 0;
-  } || printf "$C_GREEN""sourcing livebash $C_NORMAL'$3'\n" 1>&2;
-  eval "${content/exit/return}"; 
+  } || printf "$C_GREEN""bashlive>""$C_NORMAL sourcing livebash $C_NORMAL'$3'\n" 1>&2;
+  eval "${1/exit/return}"; 
   return 0 # replace 'exit'-calls with returns, and continue, even if errored
 }
 
@@ -128,7 +147,7 @@ is_integer(){
 trysource(){
   content="$1"; url="$2"; path="$3"; app="$(basename -- "$0" )";
   checkdependencies "$content" || return 0
-  has_shebang "$1" && echo "$1" > "$(basename -- "$path")" && {
+  has_shebang "$1" && [[ ! -n $FORCE_SOURCE ]] && echo "$1" > "$(basename -- "$path")" && {
     chmod 755 "$(basename -- "$path")";
     printf "$C_GREEN""downloading bash app $C_NORMAL'./$(basename -- "$path")'\n"
     return 0
@@ -161,15 +180,15 @@ insert(){
   scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
   read -p "bake bashlive into script? (y/n)" bake
   echo "*TODO*"
- # grep -E "^/ :/.*" "$file" )" > $TMPFILE.paths
+ # grep -E "^/ :/.*" "$file" )" > $BASHLIVETMP.paths
 
  # code="$( cat "$file" | grep "^#"; printf "# inserted by bashlive (bashlive path: $path)\n# author: $url\n\n"; echo "$content" | grep -v "^#" )"
  # { IFS=''; cat "$file" | while read line; do :
  #     echo "$line"; if [[ "$line" =~ ". " ]] && [[ "$line" =~ "bashlive" ]]; then printf "\n%s\n" "$code"; fi
  #   done
- # } > $TMPFILE.insert;
- # echo "bashlive> writing backup to $TMPFILE.backup"; cp "$file" "$TMPFILE.backup";
- # cp "$TMPFILE.insert" "$file" || { printf "$C_RED""could not copy '$TMPFILE.insert' to '$file' :($C_NORMAL\n"; return 1; }
+ # } > $BASHLIVETMP.insert;
+ # echo "bashlive> writing backup to $BASHLIVETMP.backup"; cp "$file" "$BASHLIVETMP.backup";
+ # cp "$BASHLIVETMP.insert" "$file" || { printf "$C_RED""could not copy '$BASHLIVETMP.insert' to '$file' :($C_NORMAL\n"; return 1; }
 }
 
 isincluded(){
@@ -210,7 +229,7 @@ function wraplines(){
 }
 
 search(){
-  args="$*"; bashlive::init; cat $TMPFILE.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
+  args="$*"; bashlive::init; cat $BASHLIVETMP.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
   # [[ -n $INCLUDED ]] && bashlive::console
 }
 
@@ -223,8 +242,8 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
   cur=${COMP_WORDS[COMP_CWORD]}
   case "$cur" in
     *) 
-       items="$( cat $TMPFILE.index.readable | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' )"
-       #explode $'\n' "COMPREPLY" "$(cat $TMPFILE.index.readable | sed 's/^[0-9]\+ //g' )"
+       items="$( cat $BASHLIVETMP.index.readable | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' )"
+       #explode $'\n' "COMPREPLY" "$(cat $BASHLIVETMP.index.readable | sed 's/^[0-9]\+ //g' )"
        COMPREPLY=( $( compgen -W "$items" -- $cur ) )
        ;;
   esac
@@ -250,6 +269,6 @@ which sed grep awk which &>/dev/null || { echo "bashlive needs at least the foll
 complete -F _bashlive_autocomplete /
 trap cleanup SIGTERM 2 3 15
 isincludedbybash && {
-  bashlive::init; 
+  bashlive::update
   printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion." 1>&2;
 } 
