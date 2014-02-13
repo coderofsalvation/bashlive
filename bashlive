@@ -15,61 +15,46 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # 
-BASHLIVETMP="/tmp/.bashlive.$(whoami)"
+BASHLIVETMP="$(echo ~)/.bashlive/cache"
 C_NORMAL="\\033[0;0m"
 C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
 TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
+WEBPIPEINDEXES=("http://neon-semiotics-490.appspot.com")
 
-bashlive::update(){
-  rm $BASHLIVETMP* &>/dev/null; bashlive::init 
-  printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget https://raw2.github.com/coderofsalvation/bashlive/master/bashlive'$C_NORMAL\n"
-}
-  
-bashlive::init(){  
-  [[ ! -f $BASHLIVETMP.index.readable ]] && gencache 
-}
+# root == no good
+[[ "$(whoami)" == "root" ]] && { echo "please dont run this as root..thnx"; exit 1; }
 
-gencache(){
-  :>$BASHLIVETMP.index
-  for repo in "${REPOS[@]}"; do 
-    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
-    echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
-  done
-  cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
-  printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $BASHLIVETMP.index | wc -l) items were indexed)\n"; return 0
+#
+# some shortcut helper functions
+#
+
+isincluded(){
+  appname="$(basename -- "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
 }
 
-bashlives(){
-  printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
-  cat $BASHLIVETMP.index.readable | cut -c 1-$(tput cols) | more 
-  echo ""; 
-  #bashlive::console;
-}
-  
-integer2bashlivepath(){
-  grep "^$1 .*" $BASHLIVETMP.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
+isincludedbybash(){
+  appname="$(basename -- "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
 }
 
-tryget(){
-  integer=$(echo "$1" | grep "^-\?[0-9]*$")
-  (( "${#integer}" > 0 )) || get "$1"
-  get "$( integer2bashlivepath $integer )"
-  # isincluded || bashlive::console # dont do bashlive::console when sourced by bash
+
+scripthasbashlive(){
+  grep -E '.*(source|\.) .*bashlive.*' "$1" &>/dev/null; return $?
 }
 
-# remove leading and trailing whitespaces
-# usage: echo " foo bar " | trim 
- 
-trim(){
-   cat - | sed -e 's/^ *//g' -e 's/ *$//g'
+explode(){
+  IFS="$1" read -a $2 <<< "$3"
 }
 
-# checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
-checkinteractive(){
-  arg="$1"; [[ "$arg" =~ \!$ ]] && INTERACTIVE=0 || INTERACTIVE=1
+iscommand(){
+  [[ "$1" == "bashlive::help" ]] || [[ "$1" == "bashlive::get" ]] || [[ "$1" == "bashlive::search" ]] || [[ "$1" == "bashlive::update" ]] && return 0
+  return 1
+}
+
+cleanup(){
+  printf "$C_NORMAL"
 }
 
 is_file(){
@@ -92,47 +77,169 @@ is_webpipe(){
 has_shebang(){
   [[ "$1" =~ ^#! ]] && return 0 || return 1
 }
+  
+get_url(){
+  grep "$1 " $BASHLIVETMP.index | head -n1 | sed "s/.*$TOKEN//g"
+}
+
+multimatch() { 
+  awk 'BEGIN{for(i=1;i<ARGC;i++) a[i]=ARGV[i]; ARGC=1} {for (i in a) if ($0 !~ a[i]) next; print}' "$@"
+}
+
+function wraplines(){
+    cat - | cut -c 1-$(tput cols)
+}
+
+is_integer(){
+  number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
+}
+
+# bashlive::update() - forces an reset + update of the cache
+
+bashlive::update(){
+  rm -rf $BASHLIVETMP* &>/dev/null; bashlive::init 
+  printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget https://raw2.github.com/coderofsalvation/bashlive/master/bashlive'$C_NORMAL\n"
+}
+ 
+# bashlive::init () - initializes and builds cache if necessary:
+
+bashlive::init(){  
+  [[ ! -d "$BASHLIVETMP" ]] && mkdir -p "$BASHLIVETMP"
+  [[ ! -f $BASHLIVETMP.index.readable ]] && bashlive::gencache 
+  bashlive::loadwebpipes
+  [[ -f $BASHLIVETMP.alias   ]] && source $BASHLIVETMP.alias
+}
+
+# bashlive::loadwebpipes() - loads webpipe.bash to cache
+
+bashlive::loadwebpipes(){
+  [[ ! -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && {
+    url="$(get_url /bash/app/network/webpipe)"; 
+    data="$(curl -s "$url")";
+    bashlive::savecache "$data" "/bash/app/network/webpipe"
+  }
+}
+
+# bashlive::initwebpipes() - indexes the webpipes
+
+bashlive::initwebpipes(){
+  for webpipeindex in "${WEBPIPEINDEXES[@]}"; do webpipe::index "$webpipeindex" &>/dev/null; done 
+}
+
+# bashlive::gencache() - builds cache
+
+bashlive::gencache(){
+  :>$BASHLIVETMP.index
+  for repo in "${REPOS[@]}"; do 
+    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
+  done
+  cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
+  bashlive::loadwebpipes
+  printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $BASHLIVETMP.index | wc -l) items were indexed)\n"; return 0
+}
+
+# bashlives() - shows all bashlive items from the repo
+
+bashlives(){
+  printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
+  cat $BASHLIVETMP.index.readable | cut -c 1-$(tput cols) | more 
+  echo ""; 
+  #bashlive::console;
+}
+
+# integer2bashlivepath() - converts a number into a bashlive path
+# @param string number 
+  
+integer2bashlivepath(){
+  grep "^$1 .*" $BASHLIVETMP.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
+}
+
+# bashlive::tryget() - takes an number or bashlivepath as input, and tries to get the item
+# @param string number or bashlivepath
+
+bashlive::tryget(){
+  integer=$(echo "$1" | grep "^-\?[0-9]*$")
+  (( "${#integer}" > 0 )) || bashlive::get "$1"
+  bashlive::get "$( integer2bashlivepath $integer )"
+  # isincluded || bashlive::console # dont do bashlive::console when sourced by bash
+}
+
+# remove leading and trailing whitespaces
+# usage: echo " foo bar " | trim 
+ 
+trim(){
+   cat - | sed -e 's/^ *//g' -e 's/ *$//g'
+}
+
+# checkinteractive() - checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
+
+checkinteractive(){
+  arg="$1"; [[ "$arg" =~ \!$ ]] && INTERACTIVE=0 || INTERACTIVE=1
+}
+
+# trysourcewebpipe() - tries to source a webpipe
+# @params string bashlive webpipe path
 
 trysourcewebpipe(){
   # first make sure webpipe is sourced 
   if ! is_function "webpipe::set"; then 
     url="$(get_url /bash/app/network/webpipe)"; 
     data="$(curl -s "$url")";
+    bashlive::savecache "$data" "/bash/app/network/webpipe"
     [[ $? == 0 ]] && INTERACTIVE=0 dosource "$data" "" "/bash/app/network/webpipe";
   fi
   webpipe::set webpipe "$(get_url "$1")" && printf "$C_GREEN""bashlive>""$C_NORMAL connected webpipe, you can now run '$(basename "$1") --help'\n" 
 }
-  
-get_url(){
-  grep "$1 " $BASHLIVETMP.index | head -n1 | sed "s/.*$TOKEN//g"
-}
 
-get(){
+# bashlive::get() - *the* most important function which sources, bakes, caches a bashlivepath
+
+bashlive::get(){
   arg="${1/\!/}"
-  is_function "$(basename -- "$arg")" && return 0; # dont source twice  
-  is_file "$arg" && scripthasbashlive && insert # bake *TODO*
-  ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { search "$@"; return 0; } # search if no path given
+  is_function "$(basename -- "$arg")" && return 0;                       # dont source twice  
+  is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg"  # bake into file
+  ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
   is_url "$arg" && data="$arg" || url="$(get_url "$arg")"
   [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
   is_webpipe "$path" && { trysourcewebpipe "$path"; return 0; } 
   content="$(curl -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  [[ "$INTERACTIVE" == "1" ]] && { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
+  bashlive::savecache "$content" "$path"
+  [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
   trysource "$content" "$url" "$path"
 }
-/(){ get "$@"; } # alias
+/(){ bashlive::get "$@"; } # alias
+
+# bashlive::savecache() - saves a bashlivepath and its contents to the local cache (handy for bashlive::bake)
+# @param string the code
+# @param string the bashlivepath
+
+bashlive::savecache(){
+  content="$1"; path="$2"
+  [[ ${#path} == 0 ]] && { echo "invalid path"; return 1; }
+  [[ ! -d "$BASHLIVETMP" ]] && { echo "invalid bashlivetmp path"; return 1; }
+  file="$BASHLIVETMP""$path"; dir="$(dirname "$file")";
+  mkdir -p "$dir" &>/dev/null
+  echo "$content" > "$file" # save to cachedir 
+}
 
 # highlights keywords in bashcode script
 # @param backgroundcolorcode
 # @param foregroundcolorcode
+
 highlightcode(){
   GREP_COLOR='$1;$2' 
   cat - | grep -E --color 'usage|@param |@|$|http.*|sudo |su |curl |wget |bash |sh |if |then |while |for |do |\{|}|\|\||&&|$'
 }
+
+# dosource() - does an (interactive) sourcing of given code
+# @param string code
+# @param string url
+# @param string path 
   
 dosource(){  
-  [[ "$INTERACTIVE" == "1" ]] && { 
+  [[ $INTERACTIVE == "1" ]] && { 
     printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"; 
     [[ ! "$write" == "y" ]] && return 0;
   } || printf "$C_GREEN""bashlive>""$C_NORMAL sourcing livebash $C_NORMAL'$3'\n" 1>&2;
@@ -140,9 +247,10 @@ dosource(){
   return 0 # replace 'exit'-calls with returns, and continue, even if errored
 }
 
-is_integer(){
-  number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
-}
+# trysource - tries to source, save or clone a repository based on the cod3
+# @param string content/code
+# @param string url
+# @param string bashlivepath
 
 trysource(){
   content="$1"; url="$2"; path="$3"; app="$(basename -- "$0" )";
@@ -155,8 +263,11 @@ trysource(){
   isincluded && dosource "$content" "$url" "$path" && return 0; # dont ask  when sourced by /bin/bash
 }
 
+# checkdependancies() - checks if programs are present on local system which are defined in code by '@dependacny
+# @params string code
+
 checkdependencies(){
-  depends="$(echo "$1" | grep -E "@dependencies " | sed 's/.*dependencies //g' )"
+  depends="$(echo "$1" | sed 's/@dependancy/@dependancies/g' | grep -E "@dependencies " | sed 's/.*dependencies //g' )"
   (( ${#depends} == 0 )) && return 0
   for depend in $depends; do 
     which $depend &>/dev/null || { printf "$C_RED[!] please install '$depend' first $C_NORMAL\n"; return 1; }
@@ -164,74 +275,64 @@ checkdependencies(){
   return 0
 }
 
-checkduplicatefunctions(){
-  echo "$1" | grep -E "(\(\){|\(\)\n{)" | while read function; do 
-    grep "$function" "$1" &>/dev/null && return 1
-  done
-  return 0
-}
+# bashlive::bake() - will replace all bashlivepaths in a file with the actual content ('baking')
+# @params string file
 
-scripthasbashlive(){
-  grep -E '.*(source|\.) .*bashlive.*' "$1" &>/dev/null; return $?
-}
-
-insert(){
-  file="$(readlink -f "$0")"; 
+bashlive::bake(){
+  file="$(readlink -f "$1")"; 
   scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
   read -p "bake bashlive into script? (y/n)" bake
-  echo "*TODO*"
- # grep -E "^/ :/.*" "$file" )" > $BASHLIVETMP.paths
-
- # code="$( cat "$file" | grep "^#"; printf "# inserted by bashlive (bashlive path: $path)\n# author: $url\n\n"; echo "$content" | grep -v "^#" )"
- # { IFS=''; cat "$file" | while read line; do :
- #     echo "$line"; if [[ "$line" =~ ". " ]] && [[ "$line" =~ "bashlive" ]]; then printf "\n%s\n" "$code"; fi
- #   done
- # } > $BASHLIVETMP.insert;
- # echo "bashlive> writing backup to $BASHLIVETMP.backup"; cp "$file" "$BASHLIVETMP.backup";
- # cp "$BASHLIVETMP.insert" "$file" || { printf "$C_RED""could not copy '$BASHLIVETMP.insert' to '$file' :($C_NORMAL\n"; return 1; }
+  grep -E "^/ /.*" "$file" > $BASHLIVETMP.paths
+  while read bashlivepath; do 
+    path="${bashlivepath/\/ /}"
+    cachefile="$BASHLIVETMP$path"
+    if [[ -f "$cachefile" ]]; then code="$code\n$(cat "$cachefile")"; else
+      printf "$C_RED""bashdown> cannot find '$cachefile' (please run the application first to build cache) $C_NORMAL \n"; 
+      return 1; 
+    fi
+  done < $BASHLIVETMP.paths
+  { IFS=''; cat "$file" | while read line; do :
+     [[ "$line" =~ ^"/ /" ]] && continue;
+     if [[ "$line" =~ ". " ]] && [[ "$line" =~ "bashlive" ]]; then printf "\n%s\n" "$code"; else echo "$line"; fi
+   done
+  } > $BASHLIVETMP.insert;
+  echo "bashlive> writing backup to $BASHLIVETMP.backup"; cp "$file" "$BASHLIVETMP.backup";
+  cp "$BASHLIVETMP.insert" "$file" || { printf "$C_RED""could not copy '$BASHLIVETMP.insert' to '$file' :($C_NORMAL\n"; return 1; }
 }
 
-isincluded(){
-  appname="$(basename -- "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
-}
+# bashlive::usage() - shows the helpscreen 
 
-isincludedbybash(){
-  appname="$(basename -- "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
-}
-
-usage(){
+bashlive::usage(){
   TEXT='
   subcommands:
     
     bashlives                   list all bashlives
-    search <keyword>          search for bashlives which match keyword
-    bashlive::update                    refresh the (repo)list of bashlives 
-    get <path>                print a bashlive (and optionally include it in your script)
-    <number>                  print bashlive with given index (printed by "ls" or "search")
+    bashlive::search <keyword>  search for bashlives which match keyword
+    bashlive::update            refresh the (repo)list of bashlives 
+    bashlive::get <path>        print a bashlive (and optionally include it in your script)
+    <number>                    print bashlive with given index (printed by "ls" or "bashlive::search")
 '
   echo "$TEXT"
 }
-help(){ usage; } # alias
+bashlive::help(){ bashlive::usage; } # alias
+
+# bashlive::console() - starts an interactive console
 
 bashlive::console(){
   printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "" cmd;
   [[ "${#cmd}" == 0 ]] && return 0 # exit on enter 
   # check if command is entered, or in case of an integer call get
-  iscommand "${cmd/ */}" && ${cmd} || tryget "$cmd"
+  iscommand "${cmd/ */}" && ${cmd} || bashlive::tryget "$cmd"
 }
 
-multimatch() { 
-  awk 'BEGIN{for(i=1;i<ARGC;i++) a[i]=ARGV[i]; ARGC=1} {for (i in a) if ($0 !~ a[i]) next; print}' "$@"
-}
+# bashlive::search() - searches the local cache 
 
-function wraplines(){
-    cat - | cut -c 1-$(tput cols)
-}
-
-search(){
+bashlive::search(){
   args="$*"; bashlive::init; cat $BASHLIVETMP.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
   # [[ -n $INCLUDED ]] && bashlive::console
 }
+
+# _bashlive_autocomplete() - the bash autocomplete function
 
 _bashlive_autocomplete(){ #  By convention, the function name  starts with an underscore.
   bashlive::init; local cur
@@ -251,24 +352,12 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
   return 0
 }
 
-explode(){
-  IFS="$1" read -a $2 <<< "$3"
-}
-
-iscommand(){
-  [[ "$1" == "help" ]] || [[ "$1" == "get" ]] || [[ "$1" == "search" ]] || [[ "$1" == "list" ]] || [[ "$1" == "bashlive::update" ]] && return 0
-  return 1
-}
-
-cleanup(){
-  printf "$C_NORMAL"
-}
-
 which sed grep awk which &>/dev/null || { echo "bashlive needs at least the following utilities: sed grep awk which"; }
 [[ "$(basename -- "$0" )" != "bashlive" ]] && INCLUDED=1 || { echo "just type 'source $0' to enjoy bashlive"; exit; }
-complete -F _bashlive_autocomplete /
+complete -F _bashlive_autocomplete / # initialization of autompletion
 trap cleanup SIGTERM 2 3 15
 isincludedbybash && {
-  bashlive::update
+  bashlive::init
+  [[ -f"$BASHLIVETMP/bash/app/network/webpipe" ]] && source "$BASHLIVETMP/bash/app/network/webpipe" && bashlive::initwebpipes
   printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/' + space and tab-away for online completion." 1>&2;
 } 
