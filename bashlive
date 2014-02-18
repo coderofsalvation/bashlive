@@ -196,18 +196,18 @@ trysourcewebpipe(){
 
 bashlive::get(){
   arg="${1/\!/}"
-  is_function "$(basename -- "$arg")" && return 0;                       # dont source twice  
-  is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg"  # bake into file
+  is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg"     # bake into file
   ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
   is_url "$arg" && data="$arg" || url="$(get_url "$arg")"
   [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
   is_webpipe "$path" && { trysourcewebpipe "$path"; return 0; } 
+  cachefile="$BASHLIVETMP$path"
+  [[ -f "$cachefile" ]] && source "$cachefile" && return 0 # re-use cache, dont source twice
   content="$(curl -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  bashlive::savecache "$content" "$path"
   [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
-  trysource "$content" "$url" "$path"
+  trysource "$content" "$url" "$path" && bashlive::savecache "$content" "$path"
 }
 /(){ bashlive::get "$@"; } # alias
 
@@ -282,16 +282,15 @@ bashlive::bake(){
   file="$(readlink -f "$1")"; 
   scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
   read -p "bake bashlive into script? (y/n)" bake
-  grep -E "^/ /.*" "$file" > $BASHLIVETMP.paths
+  grep -E "^/ /.*" "$file" | sed 's/!//g' > $BASHLIVETMP.paths
   while read bashlivepath; do 
     path="${bashlivepath/\/ /}"
     cachefile="$BASHLIVETMP$path"
-    if [[ -f "$cachefile" ]]; then code="$code\n$(cat "$cachefile")"; else
-      printf "$C_RED""bashdown> cannot find '$cachefile' (please run the application first to build cache) $C_NORMAL \n"; 
-      return 1; 
+    if [[ -f "$cachefile" ]]; then code="$( echo -e "$code\n"; cat "$cachefile")"; else
+      printf "$C_RED""bashdown> cannot find '$cachefile' (please run the application first to build cache) $C_NORMAL \n"; return 1; 
     fi
   done < $BASHLIVETMP.paths
-  { IFS=''; cat "$file" | while read line; do :
+  { IFS=''; cat "$file" | while read line; do
      [[ "$line" =~ ^"/ /" ]] && continue;
      if [[ "$line" =~ ". " ]] && [[ "$line" =~ "bashlive" ]]; then printf "\n%s\n" "$code"; else echo "$line"; fi
    done
