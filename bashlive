@@ -115,7 +115,7 @@ bashlive::init(){
 bashlive::loadwebpipes(){
   [[ ! -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && {
     url="$(get_url /bash/app/network/webpipe)"; 
-    data="$(curl -s "$url")";
+    data="$(curl -L -s "$url")";
     bashlive::savecache "$data" "/bash/app/network/webpipe"
   }
 }
@@ -131,7 +131,7 @@ bashlive::initwebpipes(){
 bashlive::gencache(){
   :>$BASHLIVETMP.index
   for repo in "${REPOS[@]}"; do 
-    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -L -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
   done
   cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
@@ -185,7 +185,7 @@ trysourcewebpipe(){
   # first make sure webpipe is sourced 
   if ! is_function "webpipe::set"; then 
     url="$(get_url /bash/app/network/webpipe)"; 
-    data="$(curl -s "$url")";
+    data="$(curl -L -s "$url")";
     bashlive::savecache "$data" "/bash/app/network/webpipe"
     [[ $? == 0 ]] && INTERACTIVE=0 dosource "$data" "" "/bash/app/network/webpipe";
   fi
@@ -205,7 +205,8 @@ bashlive::get(){
   is_webpipe "$path" && { trysourcewebpipe "$path"; return 0; } 
   cachefile="$BASHLIVETMP$path"
   [[ -f "$cachefile" ]] && source "$cachefile" && return 0 # re-use cache, dont source twice
-  content="$(curl -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  content="$(curl -L -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+  echo "$url"
   [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
   trysource "$content" "$url" "$path" && bashlive::savecache "$content" "$path"
 }
