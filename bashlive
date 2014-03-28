@@ -195,7 +195,7 @@ trysourcewebpipe(){
 # bashlive::get() - *the* most important function which sources, bakes, caches a bashlivepath
 
 bashlive::get(){
-  arg="${1/\!/}"
+  arg="${1/\!/}"; [[ ${#arg} == 0 ]] && { echo "bashlive usage: / <searchterm or bashlive path>"; return 0; }
   is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg"     # bake into file
   ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } # search if no path given
   checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
