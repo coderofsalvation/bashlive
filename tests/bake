@@ -1,0 +1,9 @@
+testfile="/tmp/bashlivetest"
+test='. bashlive
+/ /bash/function/string/trim!
+'
+echo "$test" > "$testfile"
+echo "please say 'y' to the following question"
+/ "$testfile"
+
+
