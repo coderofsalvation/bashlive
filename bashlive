@@ -23,6 +23,7 @@ TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 WEBPIPEINDEXES=("http://neon-semiotics-490.appspot.com")
+SOURCING=1 
 
 # root == no good
 [[ "$(whoami)" == "root" ]] && { echo "please dont run this as root..thnx"; exit 1; }
@@ -175,7 +176,9 @@ trim(){
 # checkinteractive() - checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
 
 checkinteractive(){
-  arg="$1"; [[ "$arg" =~ \!$ ]] && INTERACTIVE=0 || INTERACTIVE=1
+  arg="$1"; [[ "$arg" =~ \!$ ]] && {
+    INTERACTIVE=0; shift; INTERACTIVE_ARGS="$@"
+  } || INTERACTIVE=1
 }
 
 # trysourcewebpipe() - tries to source a webpipe
@@ -196,21 +199,39 @@ trysourcewebpipe(){
 
 bashlive::get(){
   arg="${1/\!/}"; [[ ${#arg} == 0 ]] && { echo "bashlive usage: / <searchterm- or bashlive path/index>"; return 0; }
-  is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg"     # bake into file
-  ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } # search if no path given
-  checkinteractive "$1"; arg="${1/\!/}" # very strange, why does the '!' gets inserted into $arg again?
-  is_url "$arg" && data="$arg" || url="$(get_url "$arg")"
+  # bake into file if needed
+  is_file "$arg" && scripthasbashlive "$arg" && bashlive::bake "$arg" 
+  # search if no path given
+  ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } 
+  checkinteractive "$@"; arg="${1/\!/}"                               # very strange, why does the '!' gets inserted into $arg again?
+  # are we dealing with an url?
+  is_url "$arg" && data="$arg" || url="$(get_url "$arg")" 
   [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
+  # convert numbers to bashlive paths
   is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
+  # are we dealing with an webpipe?
   is_webpipe "$path" && { trysourcewebpipe "$path"; return 0; } 
+  # re-use cache, dont source twice
   cachefile="$BASHLIVETMP$path"
-  [[ -f "$cachefile" ]] && source "$cachefile" && return 0 # re-use cache, dont source twice
-  content="$(curl -L -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
-  echo "$url"
-  [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
-  trysource "$content" "$url" "$path" && bashlive::savecache "$content" "$path"
+  if [[ -f "$cachefile" ]] && [[ ! -n "$2" ]]; then 
+    source "$cachefile";
+  else
+    # finally get the web content
+    content="$(curl -L -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+    # print it 
+    [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
+    bashlive::savecache "$content" "$path"
+    trysource "$content" "$url" "$path" 
+  fi
+  # run args if provided to forced source (e.g. '/ /foo/bar! arg1 arg2')
+  [[ -n "$2" ]] && bashlive::runargs "$@"
 }
 /(){ bashlive::get "$@"; } # alias
+
+bashlive::runargs(){
+  func="$(basename "$1")"; func="${func/\!/}"; shift
+  is_function "$func" && $func "$@"
+}
 
 # bashlive::savecache() - saves a bashlivepath and its contents to the local cache (handy for bashlive::bake)
 # @param string the code
