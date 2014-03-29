@@ -98,7 +98,7 @@ is_integer(){
 
 bashlive::update(){
   rm -rf $BASHLIVETMP* &>/dev/null; bashlive::init 
-  printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget https://raw2.github.com/coderofsalvation/bashlive/master/bashlive'$C_NORMAL\n"
+  printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget http://bashlive.com/bashlive'$C_NORMAL\n"
 }
  
 # bashlive::init () - initializes and builds cache if necessary:
