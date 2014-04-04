@@ -24,6 +24,7 @@ INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt")
 WEBPIPEINDEXES=("http://neon-semiotics-490.appspot.com")
 SOURCING=1 
+CURL="curl -L -s" # *TODO* why does curl/wget throw certification errors for raw.github.com-urls?
 
 # root == no good
 [[ "$(whoami)" == "root" ]] && { echo "please dont run this as root..thnx"; exit 1; }
@@ -37,7 +38,8 @@ isincluded(){
 }
 
 isincludedbybash(){
-  appname="$(basename -- "$0")"; [[ "$appname" == "bash" ]] && return 0 || return 1;
+  [[ ! $- =~ "i" ]] && return 1 # return if noninteractive processes like ssh scp e.g.
+  appname="$(basename -- "$0")"; [[ "$appname" =~ bash$ ]] && return 0 || return 1;
 }
 
 
@@ -95,9 +97,17 @@ is_integer(){
   number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
 }
 
+# bashlive::unsecure
+
+bashlive::unsecure(){
+  read -p answer "could not establish a secure connection, try non-https transfer? (y/n)"
+  [[ "$answer" == "y" ]] && CURL="curl -Lk -s"
+}
+
 # bashlive::update() - forces an reset + update of the cache
 
 bashlive::update(){
+  curl "https://raw2.github.com" 2>&1 |grep 'error setting certificate' &> /dev/null && bashlive::unsecure
   rm -rf $BASHLIVETMP* &>/dev/null; bashlive::init 
   printf "$C_GREEN""bashlive>\nbashlive>$C_NORMAL"" to get the latest source run: 'wget http://bashlive.com/bashlive'$C_NORMAL\n"
 }
@@ -132,7 +142,7 @@ bashlive::initwebpipes(){
 bashlive::gencache(){
   :>$BASHLIVETMP.index
   for repo in "${REPOS[@]}"; do 
-    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$(curl -L -s "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$( ${CURL} "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
   done
   cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
@@ -188,7 +198,7 @@ trysourcewebpipe(){
   # first make sure webpipe is sourced 
   if ! is_function "webpipe::set"; then 
     url="$(get_url /bash/app/network/webpipe)"; 
-    data="$(curl -L -s "$url")";
+    data="$( ${CURL} "$url")";
     bashlive::savecache "$data" "/bash/app/network/webpipe"
     [[ $? == 0 ]] && INTERACTIVE=0 dosource "$data" "" "/bash/app/network/webpipe";
   fi
@@ -217,7 +227,7 @@ bashlive::get(){
     source "$cachefile";
   else
     # finally get the web content
-    content="$(curl -L -s "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+    content="$( ${CURL} "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
     # print it 
     [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
     bashlive::savecache "$content" "$path"
