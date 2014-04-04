@@ -100,7 +100,7 @@ is_integer(){
 # bashlive::unsecure
 
 bashlive::unsecure(){
-  read -p answer "could not establish a secure connection, try non-https transfer? (y/n)"
+  read -p "could not establish a secure connection, try non-https transfer? (y/n)" answer
   [[ "$answer" == "y" ]] && CURL="curl -Lk -s"
 }
 
