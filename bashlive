@@ -24,7 +24,7 @@ INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt?$(date +%s)")
 WEBPIPEINDEXES=("http://neon-semiotics-490.appspot.com")
 SOURCING=1 
-CURL="curl -L -s" # *TODO* why does curl/wget throw certification errors for raw.github.com-urls?
+CURL="curl -L -s -k" # *TODO* why does curl/wget throw certification errors for raw.github.com-urls?
 
 # root == no good
 [[ "$(whoami)" == "root" ]] && { echo "please dont run this as root..thnx"; exit 1; }
