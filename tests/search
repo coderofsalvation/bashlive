@@ -1,4 +1,4 @@
 # simple search test
 
 output="$(/ string)"
-[[ ! "$output" =~ "trim" ]] && { echo "something is wrong"; exit 1; }
+[[ ! "$output" =~ "trim" ]] && { echo "something is wrong"; return 1; }

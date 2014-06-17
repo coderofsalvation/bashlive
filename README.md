@@ -12,5 +12,12 @@ in case you didnt follow that, check the link below:
 Demo / Usage / Info
 ===================
 
-See the [website](http://2webapp.com/bashlive)
+See the [website](http://www.bashlive.com)
 
+Run tests 
+=========
+
+    source bashlive
+    source tests/*
+
+More tests to come

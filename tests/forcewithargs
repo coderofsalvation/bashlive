@@ -1,0 +1,2 @@
+/ /bash/function/network/get_url_and_extract_links! bashlive.com/ | grep 'bashlive\.png' &>/dev/null
+[[ ! $? == 0 ]] && { echo "something is wrong"; return 1; }
