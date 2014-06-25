@@ -22,9 +22,11 @@ C_GREEN="\\033[0;32m"
 TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt?$(date +%s)")
-WEBPIPEINDEXES=("http://neon-semiotics-490.appspot.com")
+WEBPIPEINDEXES=("http://bashlive.com/webpipes")
 SOURCING=1 
+VERBOSELEVEL=1
 CURL="curl -L -s -k" # *TODO* why does curl/wget throw certification errors for raw.github.com-urls?
+shopt -s expand_aliases # always expose aliases
 
 # root == no good
 [[ "$(whoami)" == "root" ]] && { echo "please dont run this as root..thnx"; exit 1; }
@@ -37,8 +39,12 @@ isincluded(){
   appname="$(basename -- "$0")"; [[ ! "$appname" == "bashlive" ]] && return 0 || return 1;
 }
 
+is_interactive_tty(){
+  [[ $- =~ "i" ]] && return 0 || return 1 # return if noninteractive processes like ssh scp e.g.
+}
+
 isincludedbybash(){
-  [[ ! $- =~ "i" ]] && return 1 # return if noninteractive processes like ssh scp e.g.
+  [[ ! is_interactive_tty ]] && return 1 # skip if bash runs noninteractive (using ssh scp e.g.)
   appname="$(basename -- "$0")"; [[ "$appname" =~ bash$ ]] && return 0 || return 1;
 }
 
@@ -95,6 +101,19 @@ function wraplines(){
 
 is_integer(){
   number=$( echo "$1" | sed 's/^[-+]*[0-9]*//g' ); [[ -z "$number" ]] && return 0 || return 1
+}
+
+shouldprint(){
+  is_interactive_tty && ((VERBOSELEVEL > 0 )) && return 0
+  return 1
+}
+
+_printf(){
+  shouldprint && printf "$@"
+}
+
+_echo(){
+  _printf "$*\n"
 }
 
 # bashlive::unsecure
@@ -383,12 +402,16 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
   return 0
 }
 
+#
+# Main entry
+#
+
 which sed grep awk which &>/dev/null || { echo "bashlive needs at least the following utilities: sed grep awk which"; }
 [[ "$(basename -- "$0" )" != "bashlive" ]] && INCLUDED=1 || { echo "just type 'source $0' to enjoy bashlive"; exit; }
+isincludedbybash || VERBOSELEVEL=0
+_echo "connecting to bashlive..(please wait)"
 complete -F _bashlive_autocomplete / # initialization of autompletion
 trap cleanup SIGTERM 2 3 15
-isincludedbybash && echo "connecting to bashlive..(please wait)" && {
-  bashlive::init 
-  [[ -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && source "$BASHLIVETMP/bash/app/network/webpipe" && bashlive::initwebpipes
-  printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/ <topic>' or tab-away for online completion." 1>&2;
-} 
+bashlive::init 
+[[ -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && source "$BASHLIVETMP/bash/app/network/webpipe" && bashlive::initwebpipes
+_printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/ <topic>' or tab-away for online completion." 1>&2;
