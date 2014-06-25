@@ -409,7 +409,6 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
 which sed grep awk which &>/dev/null || { echo "bashlive needs at least the following utilities: sed grep awk which"; }
 [[ "$(basename -- "$0" )" != "bashlive" ]] && INCLUDED=1 || { echo "just type 'source $0' to enjoy bashlive"; exit; }
 isincludedbybash || VERBOSELEVEL=0
-_echo "connecting to bashlive..(please wait)"
 complete -F _bashlive_autocomplete / # initialization of autompletion
 trap cleanup SIGTERM 2 3 15
 bashlive::init 
