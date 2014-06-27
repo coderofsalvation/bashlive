@@ -23,6 +23,7 @@ TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt?$(date +%s)")
 WEBPIPEINDEXES=("http://bashlive.com/webpipes")
+WEBPIPEPATH="community/app/network/webpipe"
 SOURCING=1 
 VERBOSELEVEL=1
 CURL="curl -L -s -k" # *TODO* why does curl/wget throw certification errors for raw.github.com-urls?
@@ -143,10 +144,10 @@ bashlive::init(){
 # bashlive::loadwebpipes() - loads webpipe.bash to cache
 
 bashlive::loadwebpipes(){
-  [[ ! -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && {
-    url="$(get_url /bash/app/network/webpipe)"; 
+  [[ ! -f "$BASHLIVETMP/$WEBPIPEPATH" ]] && {
+    url="$(get_url "/$WEBPIPEPATH")"; 
     data="$(curl -L -s "$url")";
-    bashlive::savecache "$data" "/bash/app/network/webpipe"
+    bashlive::savecache "$data" "/$WEBPIPEPATH"
   }
 }
 
@@ -165,7 +166,6 @@ bashlive::gencache(){
     echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
   done
   cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
-  bashlive::loadwebpipes
   printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $BASHLIVETMP.index | wc -l) items were indexed)\n"; return 0
 }
 
@@ -175,7 +175,6 @@ bashlives(){
   printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
   cat $BASHLIVETMP.index.readable | cut -c 1-$(tput cols) | more 
   echo ""; 
-  #bashlive::console;
 }
 
 # integer2bashlivepath() - converts a number into a bashlive path
@@ -192,7 +191,6 @@ bashlive::tryget(){
   integer=$(echo "$1" | grep "^-\?[0-9]*$")
   (( "${#integer}" > 0 )) || bashlive::get "$1"
   bashlive::get "$( integer2bashlivepath $integer )"
-  # isincluded || bashlive::console # dont do bashlive::console when sourced by bash
 }
 
 # remove leading and trailing whitespaces
@@ -356,30 +354,22 @@ bashlive::usage(){
   TEXT='
   subcommands:
     
-    bashlives                   list all bashlives
-    bashlive::search <keyword>  search for bashlives which match keyword
+    bashlives                   list all bashlive items
+    / <searchkeyword>           search for bashlives which match keyword
+    / <bashlive path>           gets an bashlive item, and optionally includes it
+    / <number>                  print bashlive with given index (printed by "ls" or "bashlive::search")
     bashlive::update            refresh the (repo)list of bashlives 
     bashlive::get <path>        print a bashlive (and optionally include it in your script)
-    <number>                    print bashlive with given index (printed by "ls" or "bashlive::search")
+    webpipe::list               lists all webpipes 
 '
   echo "$TEXT"
 }
 bashlive::help(){ bashlive::usage; } # alias
 
-# bashlive::console() - starts an interactive console
-
-bashlive::console(){
-  printf "$C_GREEN""bashlive> $C_NORMAL"; read -p "" cmd;
-  [[ "${#cmd}" == 0 ]] && return 0 # exit on enter 
-  # check if command is entered, or in case of an integer call get
-  iscommand "${cmd/ */}" && ${cmd} || bashlive::tryget "$cmd"
-}
-
 # bashlive::search() - searches the local cache 
 
 bashlive::search(){
   args="$*"; bashlive::init; cat $BASHLIVETMP.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
-  # [[ -n $INCLUDED ]] && bashlive::console
 }
 
 # _bashlive_autocomplete() - the bash autocomplete function
@@ -412,5 +402,5 @@ isincludedbybash || VERBOSELEVEL=0
 complete -F _bashlive_autocomplete / # initialization of autompletion
 trap cleanup SIGTERM 2 3 15
 bashlive::init 
-[[ -f "$BASHLIVETMP/community/app/network/webpipe" ]] && source "$BASHLIVETMP/community/app/network/webpipe" && bashlive::initwebpipes
+[[ -f "$BASHLIVETMP/$WEBPIPEPATH" ]] && source "$BASHLIVETMP/$WEBPIPEPATH" && bashlive::initwebpipes
 _printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/ <topic>' or tab-away for online completion." 1>&2;
