@@ -22,7 +22,6 @@ C_GREEN="\\033[0;32m"
 TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt?$(date +%s)")
-REPOS+=("https://gist.githubusercontent.com/coderofsalvation/012ddbc75326162faff6/raw/f48b483d3947e29495172ce8a76b802169c5c430/testindex")
 WEBPIPEINDEXES=("http://bashlive.com/webpipes")
 WEBPIPEPATH="community/app/network/webpipe"
 SOURCING=1 
@@ -163,7 +162,7 @@ bashlive::initwebpipes(){
 bashlive::gencache(){
   :>$BASHLIVETMP.index
   for repo in "${REPOS[@]}"; do 
-    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$( ${CURL} "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
+    printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo'\n"; index="$( ${CURL} "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
     echo "$index" | sed 's/    /\t/g' | tail -n+3 >> $BASHLIVETMP.index; # skip line 1+2, and convert 4 spaces into tabs
   done
   numbered="$(cat -ns $BASHLIVETMP.index)"; echo "$numbered" > $BASHLIVETMP.index;
