@@ -1,10 +1,9 @@
-testfile="/tmp/bashlivetest"
+testfile="/tmp/bashlivetest.$(whoami)"
 test='. '$(pwd)'/bashlive
 / /bash/function/string/trim!
 echo " i should be trimmed " | trim
 '
 echo "$test" > "$testfile"
-echo "please say 'y' to the following question"
-BAKE=y / "$testfile"
-chmod 755 $testfile && $testfile | grep -E "^i should be trimmed" && echo "trimming succesful" || echo "FAIL"
+BAKE=y / $testfile &>/dev/null
+chmod 755 $testfile && bash $testfile | grep -E "^i should be trimmed" &>/dev/null || echo "tests/bake FAILED"
 

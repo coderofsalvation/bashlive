@@ -22,6 +22,7 @@ C_GREEN="\\033[0;32m"
 TOKEN="|||"
 INTERACTIVE=1
 REPOS=("https://raw2.github.com/coderofsalvation/bashlive.repo/master/index.txt?$(date +%s)")
+REPOS+=("https://gist.githubusercontent.com/coderofsalvation/012ddbc75326162faff6/raw/f48b483d3947e29495172ce8a76b802169c5c430/testindex")
 WEBPIPEINDEXES=("http://bashlive.com/webpipes")
 WEBPIPEPATH="community/app/network/webpipe"
 SOURCING=1 
@@ -89,7 +90,7 @@ has_shebang(){
 }
   
 get_url(){
-  grep "$1 " $BASHLIVETMP.index | head -n1 | sed "s/.*$TOKEN//g"
+  grep "$1" $BASHLIVETMP.index | head -n1 | awk -F'\t' '{ print $2 }'
 }
 
 multimatch() { 
@@ -97,7 +98,7 @@ multimatch() {
 }
 
 function wraplines(){
-    cat - | cut -c 1-$(tput cols)
+    cat - | cut -c 1-$(($(tput cols)-1))
 }
 
 is_integer(){
@@ -136,7 +137,7 @@ bashlive::update(){
 
 bashlive::init(){  
   [[ ! -d "$BASHLIVETMP" ]] && mkdir -p "$BASHLIVETMP"
-  [[ ! -f $BASHLIVETMP.index.readable ]] && bashlive::gencache 
+  [[ ! -f $BASHLIVETMP.index ]] && bashlive::gencache 
   bashlive::loadwebpipes
   [[ -f $BASHLIVETMP.alias   ]] && source $BASHLIVETMP.alias
 }
@@ -163,9 +164,11 @@ bashlive::gencache(){
   :>$BASHLIVETMP.index
   for repo in "${REPOS[@]}"; do 
     printf "$C_GREEN""bashlive>$C_NORMAL indexing '$repo' into /tmp\n"; index="$( ${CURL} "$repo")"; [[ $? == 1 ]] && echo "failed" && continue 
-    echo "$index" | tail -n+3 >> $BASHLIVETMP.index; 
+    echo "$index" | sed 's/    /\t/g' | tail -n+3 >> $BASHLIVETMP.index; # skip line 1+2, and convert 4 spaces into tabs
   done
-  cat $BASHLIVETMP.index | sed 's/'"$TOKEN"'.*//g' > $BASHLIVETMP.index.readable
+  numbered="$(cat -ns $BASHLIVETMP.index)"; echo "$numbered" > $BASHLIVETMP.index;
+  cat $BASHLIVETMP.index | trim | sed 's/    /\t/g' | awk -F'\t' '{ printf("%6s %-45s %s\t%s\n",$1,$2,$3,$4) }' > $BASHLIVETMP.index.formatted
+  mv $BASHLIVETMP.index.formatted $BASHLIVETMP.index
   printf "$C_GREEN""bashlive>$C_NORMAL done ($(cat $BASHLIVETMP.index | wc -l) items were indexed)\n"; return 0
 }
 
@@ -173,7 +176,7 @@ bashlive::gencache(){
 
 bashlives(){
   printf "$C_GREEN""the following bashlive's are available: $C_NORMAL\n\n"
-  cat $BASHLIVETMP.index.readable | cut -c 1-$(tput cols) | more 
+  cat $BASHLIVETMP.index | cut -c 1-$(tput cols) | more 
   echo ""; 
 }
 
@@ -181,7 +184,7 @@ bashlives(){
 # @param string number 
   
 integer2bashlivepath(){
-  grep "^$1 .*" $BASHLIVETMP.index | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g'
+  grep -P " $1 " $BASHLIVETMP.index | head -n1 | awk -F'\t' '{ print $2 }'
 }
 
 # bashlive::tryget() - takes an number or bashlivepath as input, and tries to get the item
@@ -231,11 +234,11 @@ bashlive::get(){
   # search if no path given
   ! is_integer "$arg" && ! is_url "$arg" && [[ ! "$1" =~ ^/ ]] && { bashlive::search "$@"; return 0; } 
   checkinteractive "$@"; arg="${1/\!/}"                               # very strange, why does the '!' gets inserted into $arg again?
-  # are we dealing with an url?
-  is_url "$arg" && data="$arg" || url="$(get_url "$arg")" 
-  [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   # convert numbers to bashlive paths
   is_integer "$arg" && path="$(integer2bashlivepath $arg)" || path="$arg"
+  # are we dealing with an url?
+  is_url "$arg" && { data="$arg"; url="$arg"; } || url="$(get_url "$path")" 
+  [[ ${#url} == 0 ]] && { printf "$C_RED""bashlive '$arg' not found $C_NORMAL\n"; return 1; }
   # are we dealing with an webpipe?
   is_webpipe "$path" && { trysourcewebpipe "$path"; return 0; } 
   # re-use cache, dont source twice
@@ -243,7 +246,7 @@ bashlive::get(){
   if [[ -f "$cachefile" ]] && [[ ! -n "$2" ]]; then 
     content="$(cat "$cachefile")"
   else # get the web content
-    content="$( ${CURL} "$url")" || { printf "$C_RED""could not retrieve bashlive url '$data'$C_NORMAL\n"; return 1; }
+    content="$( ${CURL} "$url")" || { printf "$C_RED""could not retrieve bashlive url '$url'$C_NORMAL\n"; return 1; }
   fi
   # print it 
   [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
@@ -327,7 +330,7 @@ checkdependencies(){
 # @params string file
 
 bashlive::bake(){
-  file="$(readlink -f "$1")"; 
+  file="$(readlink -f "$1")"; code=""
   scripthasbashlive "$file" || { printf "$C_RED""could not find 'source bashlive' in your script :($C_NORMAL\n"; return 1; }
   [[ ! -n BAKE=y ]] && read -p "bake bashlive into script? (y/n)" bake || bake="y"
   grep -E "^/ /.*" "$file" | sed 's/!//g' > $BASHLIVETMP.paths
@@ -369,7 +372,7 @@ bashlive::help(){ bashlive::usage; } # alias
 # bashlive::search() - searches the local cache 
 
 bashlive::search(){
-  args="$*"; bashlive::init; cat $BASHLIVETMP.index.readable | multimatch "$@" | wraplines | more | grep -E "${args// /|}"
+  args="$*"; bashlive::init; cat $BASHLIVETMP.index | multimatch "$@" | sed 's/\t.*//g' | wraplines | more | grep -E "${args// /|}"
 }
 
 # _bashlive_autocomplete() - the bash autocomplete function
@@ -383,8 +386,8 @@ _bashlive_autocomplete(){ #  By convention, the function name  starts with an un
   cur=${COMP_WORDS[COMP_CWORD]}
   case "$cur" in
     *) 
-       items="$( cat $BASHLIVETMP.index.readable | sed 's/^[0-9]\+ //g' | trim | sed 's/ .*//g' | sed ':a;N;$!ba;s/\n/ /g' )"
-       #explode $'\n' "COMPREPLY" "$(cat $BASHLIVETMP.index.readable | sed 's/^[0-9]\+ //g' )"
+       items="$( cat $BASHLIVETMP.index | awk '{ print $2 }' | trim | sed ':a;N;$!ba;s/\n/ /g' )"
+       #explode $'\n' "COMPREPLY" "$(cat $BASHLIVETMP.index | sed 's/^[0-9]\+ //g' )"
        COMPREPLY=( $( compgen -W "$items" -- $cur ) )
        ;;
   esac
