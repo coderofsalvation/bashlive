@@ -293,7 +293,7 @@ dosource(){
   [[ $INTERACTIVE == "1" ]] && { 
     printf "$C_GREEN"; read -p "source? (y/n) " write; printf "$C_NORMAL"; 
     [[ ! "$write" == "y" ]] && return 0;
-  } || printf "$C_GREEN""bashlive>""$C_NORMAL sourcing livebash $C_NORMAL'$3'\n" 1>&2;
+  } || _printf "$C_GREEN""bashlive>""$C_NORMAL sourcing livebash $C_NORMAL'$3'\n" 1>&2;
   eval "${1/exit/return}"; 
   return 0 # replace 'exit'-calls with returns, and continue, even if errored
 }
