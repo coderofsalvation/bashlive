@@ -1,0 +1,1 @@
+xpath &>/dev/null || return 1

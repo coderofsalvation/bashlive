@@ -412,5 +412,5 @@ isincludedbybash || VERBOSELEVEL=0
 complete -F _bashlive_autocomplete / # initialization of autompletion
 trap cleanup SIGTERM 2 3 15
 bashlive::init 
-[[ -f "$BASHLIVETMP/bash/app/network/webpipe" ]] && source "$BASHLIVETMP/bash/app/network/webpipe" && bashlive::initwebpipes
+[[ -f "$BASHLIVETMP/community/app/network/webpipe" ]] && source "$BASHLIVETMP/community/app/network/webpipe" && bashlive::initwebpipes
 _printf "$C_GREEN""bashlive>$C_NORMAL %s\n" "type '/ <topic>' or tab-away for online completion." 1>&2;
