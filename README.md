@@ -51,4 +51,5 @@ The issuetracker and the community can ofcoarse vote for- against these things.
 * [bashlive.examples] more application examples in https://github.com/coderofsalvation/bashlive.examples
 * [bashlive.repo] remove bashism, make snippets compatible with zsh, sh and so on
 * [bashlive.repo] authentication functions: oAuth1, oAuth2 for easy integration of social services e.g.
-* [bashlive] snippethub: live api searchqueries to commandlinefu.com
+* [bashlive] snippethub: live api searchqueries to commandlinefu.com e.g.
+* [bashlive] bash-builtins in c for fast json- xml- processing
