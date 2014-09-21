@@ -21,3 +21,11 @@ Run tests
     source tests/*
 
 More tests to come
+
+API functions / snippets
+========================
+see [https://github.com/coderofsalvation/bashlive.repo](https://github.com/coderofsalvation/bashlive.repo) 
+
+Example applications
+====================
+see [https://github.com/coderofsalvation/bashlive.examples](https://github.com/coderofsalvation/bashlive.examples)
