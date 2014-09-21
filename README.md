@@ -46,7 +46,7 @@ ROADMAP bashlive
 This is a 'chaos' roadmap, which means it doesnt need to follow particular order to keep things fun and flexible.
 The issuetracker and the community can ofcoarse vote for- against these things.
 
-* [bashlive] optimize, cleanup and test the bashlive-script (code became already a bit messy)
+* [bashlive] optimize, cleanup and test the bashlive-script (refactor messy stuff with more awk)
 * [bashlive] configuration-file ~/.bashlive for custom behaviour (the automatic sourcing of the webpipe-script should be defined here)
 * [bashlive] introduce a downvoting mechanism for snippets for core api-snippets
 * [bashlive] improve the website (native english person needed)
