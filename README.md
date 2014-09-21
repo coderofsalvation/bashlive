@@ -34,6 +34,7 @@ The scope of bashlive
 =====================
 * bash only
 * #interactive: Easily search and source online functions and snippets, and transpile (bake-feature) it into bash.
+* #familiar: make it easy for non-bash people to get what they want ( search 'substr' instead of knowing ${foo:1:4})
 * #superset-of-shell commands: like coffeescript for nodejs.
 
 Bashlive is sourced when starting a terminal, so you can immediately go ahead and never have
