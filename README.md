@@ -49,6 +49,7 @@ The issuetracker and the community can ofcoarse vote for- against these things.
 * [bashlive] optimize, cleanup and test the bashlive-script (code became already a bit messy)
 * [bashlive] configuration-file ~/.bashlive for custom behaviour (the automatic sourcing of the webpipe-script should be defined here)
 * [bashlive] introduce a downvoting mechanism for snippets for core api-snippets
+* [bashlive] improved dependency handling
 * [bashlive] improved security concerning updating & directly sourcing bashcode
 * [bashlive.examples] more application examples in https://github.com/coderofsalvation/bashlive.examples
 * [bashlive.repo] authentication functions: oAuth1, oAuth2 for easy integration of social services e.g.
