@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # 
 BASHLIVETMP="$(echo ~)/.bashlive/cache"
+STARTUPPATH="${BASHLIVETMP/cache/startup}" 
 C_NORMAL="\\033[0;0m"
 C_RED="\\033[0;31m"
 C_GREEN="\\033[0;32m"
@@ -139,6 +140,7 @@ bashlive::init(){
   [[ ! -f $BASHLIVETMP.index ]] && bashlive::gencache 
   bashlive::loadwebpipes
   [[ -f $BASHLIVETMP.alias   ]] && source $BASHLIVETMP.alias
+  [[ -d $STARTUPPATH         ]] && source "$STARTUPPATH"/*
 }
 
 # bashlive::loadwebpipes() - loads webpipe.bash to cache
@@ -203,7 +205,7 @@ trim(){
    cat - | sed -e 's/^ *//g' -e 's/ *$//g'
 }
 
-# checkinteractive() - checks if noninteractive mode should be triggered (if ':' is present in the bashlive path)
+# checkinteractive() - checks if noninteractive mode should be triggered (if '!' is present in the bashlive path)
 
 checkinteractive(){
   arg="$1"; [[ "$arg" =~ \!$ ]] && {
@@ -228,7 +230,7 @@ trysourcewebpipe(){
 # bashlive::get() - *the* most important function which sources, bakes, caches a bashlivepath
 
 bashlive::get(){
-  arg="${1/\!/}"; [[ ${#arg} == 0 ]] && { echo "bashlive usage: / <searchterm- or bashlive path/index>"; return 0; }
+  arg="${1/\!/}"; [[ ${#arg} == 0 ]] && { echo "bashlive usage: / <searchterm- or bashlive path/index> [--startup]"; return 0; }
   # bake into file if needed
   is_file "$arg" && { scripthasbashlive "$arg" && bashlive::bake "$arg" && return 0; }
   # search if no path given
@@ -251,6 +253,8 @@ bashlive::get(){
   # print it 
   [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
   [[ ! -f "$cachefile" ]] && bashlive::savecache "$content" "$path"
+  echo " 2=$2"
+  [[ "$2" == "--startup"  ]] && bashlive::savestartup "$path"
   trysource "$content" "$url" "$path" 
   # run args if provided to forced source (e.g. '/ /foo/bar! arg1 arg2')
   [[ -n "$2" ]] && bashlive::runargs "$@"
@@ -260,6 +264,17 @@ bashlive::get(){
 bashlive::runargs(){
   func="$(basename "$1")"; func="${func/\!/}"; shift
   is_function "$func" && $func "$@"
+}
+
+# bashlive::savestartup() - creates a symlink so bashlive will source the code upon startup 
+# @param string the bashlivepath
+
+bashlive::savestartup(){
+  path="$1"
+  [[ ${#path} == 0 ]] && { echo "invalid path"; return 1; }
+  [[ ! -d $STARTUPPATH ]] && mkdir -p $STARTUPPATH
+  ln -fs "$BASHLIVETMP""$path" "$STARTUPPATH"/.
+  echo "saved to $STARTUPPATH"
 }
 
 # bashlive::savecache() - saves a bashlivepath and its contents to the local cache (handy for bashlive::bake)
