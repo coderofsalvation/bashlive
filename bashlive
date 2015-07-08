@@ -253,7 +253,6 @@ bashlive::get(){
   # print it 
   [[ $INTERACTIVE == "0" ]] || { printf "\n%s\n%s\n\n" "# source: ${url/\/raw*/}" "$content"; } | more | highlightcode
   [[ ! -f "$cachefile" ]] && bashlive::savecache "$content" "$path"
-  echo " 2=$2"
   [[ "$2" == "--startup"  ]] && bashlive::savestartup "$path"
   trysource "$content" "$url" "$path" 
   # run args if provided to forced source (e.g. '/ /foo/bar! arg1 arg2')
